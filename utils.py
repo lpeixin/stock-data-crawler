@@ -41,6 +41,7 @@ def read_last_date_from_csv(path: str) -> Optional[datetime]:
     - Legacy schema: comma-separated, header in Chinese, first column is YYYY-MM-DD
     - New schema: pipe-separated ("|"), header: timestamps|open|hight|low|close|volume|amount;
       first column is epoch seconds (UTC) integer.
+    - Intraday schema: comma-separated, first column is YYYY-MM-DD HH:MM:SS
     """
     if not csv_exists(path):
         return None
@@ -64,6 +65,15 @@ def read_last_date_from_csv(path: str) -> Optional[datetime]:
             if not row:
                 continue
             cell0 = row[0].strip()
+            
+            # Try intraday format YYYY-MM-DD HH:MM:SS first
+            try:
+                d = datetime.strptime(cell0, "%Y-%m-%d %H:%M:%S")
+                last_date = d
+                continue
+            except Exception:
+                pass
+                
             # Try legacy YYYY-MM-DD
             try:
                 d = datetime.strptime(cell0, "%Y-%m-%d")

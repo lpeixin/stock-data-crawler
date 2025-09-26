@@ -20,10 +20,18 @@ import yfinance as yf
 from utils import setup_logger, ensure_dir, write_history_csv, polite_sleep
 
 
-def df_to_rows(df: pd.DataFrame) -> List[Tuple[str, float, float, float, float, float, float]]:
+def df_to_rows(df: pd.DataFrame, interval: str = "1d") -> List[Tuple[str, float, float, float, float, float, float]]:
+    """Convert DataFrame to rows with appropriate timestamp formatting based on interval."""
     rows: List[Tuple[str, float, float, float, float, float, float]] = []
+    
+    # Define timestamp format based on interval
+    if interval == "1d":
+        ts_format = "%Y-%m-%d"  # Daily: YYYY-MM-DD
+    else:
+        ts_format = "%Y-%m-%d %H:%M:%S"  # Intraday: YYYY-MM-DD HH:MM:SS
+    
     for idx, r in df.iterrows():
-        ts = pd.Timestamp(idx).tz_localize(None).strftime("%Y-%m-%d")
+        ts = pd.Timestamp(idx).tz_localize(None).strftime(ts_format)
         open_ = float(r["Open"]) if pd.notna(r["Open"]) else None
         close_ = float(r["Close"]) if pd.notna(r["Close"]) else None
         high_ = float(r["High"]) if pd.notna(r["High"]) else None
@@ -73,6 +81,9 @@ def main():
     parser.add_argument("--ticker", required=True, help="US ticker, e.g. AAPL")
     parser.add_argument("--start", help="Start date YYYY-MM-DD")
     parser.add_argument("--end", help="End date YYYY-MM-DD (exclusive), default today")
+    parser.add_argument("--interval", default="1d", 
+                       choices=["1d", "1h", "30m", "15m", "5m"],
+                       help="Data interval: 1d (daily), 1h (hourly), 30m (30min), 15m (15min), 5m (5min)")
     parser.add_argument("--out-dir", default="data_us", help="Output directory, default data_us")
     args = parser.parse_args()
 
@@ -87,14 +98,20 @@ def main():
     else:
         end_eff = (datetime.utcnow() + timedelta(days=1)).strftime("%Y-%m-%d")
 
-    df = fetch_history(args.ticker, start=args.start, end=end_eff)
+    df = fetch_history(args.ticker, start=args.start, end=end_eff, interval=args.interval)
 
-    rows = df_to_rows(df)
+    rows = df_to_rows(df, interval=args.interval)
     out_dir = args.out_dir
     ensure_dir(out_dir)
-    out_path = f"{out_dir.rstrip('/')}/{args.ticker.upper()}.csv"
+    
+    # Add interval suffix to filename for non-daily data
+    if args.interval == "1d":
+        out_path = f"{out_dir.rstrip('/')}/{args.ticker.upper()}.csv"
+    else:
+        out_path = f"{out_dir.rstrip('/')}/{args.ticker.upper()}_{args.interval}.csv"
+    
     write_history_csv(out_path, rows)
-    logger.info(f"已保存 {args.ticker.upper()} 历史数据，共 {len(rows)} 行 -> {out_path}")
+    logger.info(f"已保存 {args.ticker.upper()} 历史数据 ({args.interval})，共 {len(rows)} 行 -> {out_path}")
 
 
 if __name__ == "__main__":

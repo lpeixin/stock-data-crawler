@@ -18,10 +18,18 @@ import yfinance as yf
 from utils import setup_logger, read_last_date_from_csv, append_history_csv, polite_sleep
 
 
-def df_to_rows(df: pd.DataFrame) -> List[Tuple[str, float, float, float, float, float, float]]:
+def df_to_rows(df: pd.DataFrame, interval: str = "1d") -> List[Tuple[str, float, float, float, float, float, float]]:
+    """Convert DataFrame to rows with appropriate timestamp formatting based on interval."""
     rows: List[Tuple[str, float, float, float, float, float, float]] = []
+    
+    # Define timestamp format based on interval
+    if interval == "1d":
+        ts_format = "%Y-%m-%d"  # Daily: YYYY-MM-DD
+    else:
+        ts_format = "%Y-%m-%d %H:%M:%S"  # Intraday: YYYY-MM-DD HH:MM:SS
+    
     for idx, r in df.iterrows():
-        ts = pd.Timestamp(idx).tz_localize(None).strftime("%Y-%m-%d")
+        ts = pd.Timestamp(idx).tz_localize(None).strftime(ts_format)
         open_ = float(r["Open"]) if pd.notna(r["Open"]) else None
         close_ = float(r["Close"]) if pd.notna(r["Close"]) else None
         high_ = float(r["High"]) if pd.notna(r["High"]) else None
@@ -70,6 +78,9 @@ def main():
     parser = argparse.ArgumentParser(description="Incrementally update US stock history CSV via Yahoo Finance")
     parser.add_argument("--ticker", required=True, help="US ticker, e.g. AAPL")
     parser.add_argument("--csv", required=True, help="Existing CSV path to append to")
+    parser.add_argument("--interval", default="1d", 
+                       choices=["1d", "1h", "30m", "15m", "5m"],
+                       help="Data interval: 1d (daily), 1h (hourly), 30m (30min), 15m (15min), 5m (5min)")
     args = parser.parse_args()
 
     logger = setup_logger()
@@ -78,21 +89,27 @@ def main():
         logger.info("未找到有效历史数据，建议先运行 fetch_history_us.py 生成全量数据。")
         return
 
-    start_date = (last_date + timedelta(days=1)).strftime("%Y-%m-%d")
-    end_date = datetime.utcnow().strftime("%Y-%m-%d")
+    # For intraday data, we need different start calculation
+    if args.interval == "1d":
+        start_date = (last_date + timedelta(days=1)).strftime("%Y-%m-%d")
+        end_date = datetime.utcnow().strftime("%Y-%m-%d")
+    else:
+        # For intraday data, start from the last date and get more recent data
+        start_date = last_date.strftime("%Y-%m-%d")
+        end_date = (datetime.utcnow() + timedelta(days=1)).strftime("%Y-%m-%d")
 
-    if start_date >= end_date:
+    if args.interval == "1d" and start_date >= end_date:
         logger.info("CSV 已是最新，无需更新。")
         return
 
-    df = fetch_history(args.ticker, start=start_date, end=end_date)
+    df = fetch_history(args.ticker, start=start_date, end=end_date, interval=args.interval)
     if df.empty:
         logger.info("没有新数据可追加。")
         return
 
-    rows = df_to_rows(df)
+    rows = df_to_rows(df, interval=args.interval)
     append_history_csv(args.csv, rows)
-    logger.info(f"已更新 {args.ticker.upper()} 历史数据，追加 {len(rows)} 行 -> {args.csv}")
+    logger.info(f"已更新 {args.ticker.upper()} 历史数据 ({args.interval})，追加 {len(rows)} 行 -> {args.csv}")
 
 
 if __name__ == "__main__":
