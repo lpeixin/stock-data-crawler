@@ -23,54 +23,101 @@ pip install -r requirements.txt
 ## 2) 使用 / Usage
 
 数据默认保存到：
-- 美股 US -> `data_us/<TICKER>.csv`
-- A股 CN -> `data_cn/<TICKER>.csv`
+- 美股 US -> `data_us/<TICKER>.csv` (日线) 或 `data_us/<TICKER>_<INTERVAL>.csv` (分钟线)
+- A股 CN -> `data_cn/<TICKER>.csv` (日线) 或 `data_cn/<TICKER>_<INTERVAL>.csv` (分钟线)
 
 你也可以用 `--out-dir` 或 `--csv` 自定义。
+
+### 时间粒度支持 / Time Intervals
+
+支持以下时间粒度：
+- `1d`: 日线数据 (默认)
+- `1h`: 1小时线数据
+- `30m`: 30分钟线数据  
+- `15m`: 15分钟线数据
+- `5m`: 5分钟线数据
+
+时间戳格式：
+- 日线: `YYYY-MM-DD` (如: 2024-01-15)
+- 分钟线: `YYYY-MM-DD HH:MM:SS` (如: 2024-01-15 09:30:00)
 
 ### US 美股
 
 - 全量下载 / Full history
 
 ```bash
+# 日线数据
 python fetch_history_us.py --ticker AAPL --start 2010-01-01 --end 2025-12-31 --out-dir data_us
+
+# 5分钟线数据
+python fetch_history_us.py --ticker AAPL --start 2024-01-01 --interval 5m --out-dir data_us
+
+# 1小时线数据
+python fetch_history_us.py --ticker AAPL --start 2024-01-01 --interval 1h --out-dir data_us
 ```
 
 - 增量更新 / Incremental update
 
 ```bash
+# 日线增量更新
 python update_history_us.py --ticker AAPL --csv data_us/AAPL.csv
+
+# 5分钟线增量更新
+python update_history_us.py --ticker AAPL --csv data_us/AAPL_5m.csv --interval 5m
 ```
 
 说明 / Notes:
 - Ticker 示例：AAPL, MSFT, TSLA, BRK-B（yfinance 规范）
 - `--end` 为不包含当日的截止日期，默认今天。
+- 分钟线数据文件名会自动添加间隔后缀，如 `AAPL_5m.csv`
 
 ### CN 中国A股
 
 - 全量下载 / Full history
 
 ```bash
+# 日线数据
 python fetch_history_cn.py --ticker 600519 --start 2010-01-01 --out-dir data_cn
+
+# 5分钟线数据
+python fetch_history_cn.py --ticker 600519 --start 2024-01-01 --interval 5m --out-dir data_cn
+
+# 30分钟线数据
+python fetch_history_cn.py --ticker 600519 --start 2024-01-01 --interval 30m --out-dir data_cn
 ```
 
 - 增量更新 / Incremental update
 
 ```bash
+# 日线增量更新
 python update_history_cn.py --ticker 600519 --csv data_cn/600519.csv
+
+# 15分钟线增量更新
+python update_history_cn.py --ticker 600519 --csv data_cn/600519_15m.csv --interval 15m
 ```
 
 说明 / Notes:
 - 支持 纯数字/带后缀/带市场前缀：`600519` / `600519.SH` / `SH600519` / `000001.SZ` 等，脚本会自动标准化为 AkShare 需要的格式。
 - 默认会优先使用前复权（qfq），失败则尝试后复权（hfq），最后无复权。
+- **注意**: A股分钟线数据可能受限于数据源，某些情况下会回退到日线数据。
 
 ## 3) 数据格式 / Data format
 
 CSV 示例：
 
+**日线数据 (1d):**
 ```
 timestamps,open,high,low,close,volume,amount
 2024-06-18,11.27,11.28,11.26,11.27,379.0,427161.0
+2024-06-19,11.28,11.30,11.25,11.29,425.0,479325.0
+...
+```
+
+**分钟线数据 (5m, 15m, 30m, 1h):**
+```
+timestamps,open,high,low,close,volume,amount
+2024-06-18 09:30:00,11.27,11.28,11.26,11.27,379.0,427161.0
+2024-06-18 09:35:00,11.28,11.30,11.25,11.29,425.0,479325.0
 ...
 ```
 
@@ -98,8 +145,17 @@ fetch_history_cn.py      # A股全量抓取
 update_history_cn.py     # A股增量更新
 utils.py                 # 日志、CSV IO、延时
 requirements.txt         # 依赖
+example_usage.py         # 使用示例脚本
 data_us/                 # 建议的 US 数据目录（脚本自动创建）
 data_cn/                 # 建议的 CN 数据目录（脚本自动创建）
+```
+
+### 快速开始 / Quick Start
+
+运行示例脚本体验不同时间粒度的数据抓取：
+
+```bash
+python example_usage.py
 ```
 
 ## 7) 数据源说明 / Data sources
